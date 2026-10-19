@@ -1,0 +1,27 @@
+# echin-dotfiles Ghostty configuration
+# Requires the JetBrainsMono Nerd Font (installed by install.sh on macOS).
+theme = TokyoNight
+background = 1a1b26
+
+font-family = JetBrainsMono Nerd Font
+font-size = 14
+font-style = SemiBold
+adjust-cell-height = 8%
+window-padding-x = 10
+window-padding-y = 8
+
+mouse-hide-while-typing = true
+window-save-state = always
+quit-after-last-window-closed = true
+bell-features = no-audio,no-system
+
+# Let Neovim receive Cmd-C when the terminal has no selection of its own.
+keybind = performable:super+c=copy_to_clipboard:mixed
+
+# Forward reading-back/forward shortcuts to the shell/editor.
+keybind = super+[=csi:91;9u
+keybind = super+【=csi:91;9u
+keybind = super+BracketLeft=csi:91;9u
+keybind = super+]=csi:93;9u
+keybind = super+】=csi:93;9u
+keybind = super+BracketRight=csi:93;9u

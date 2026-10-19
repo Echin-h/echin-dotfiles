@@ -1,0 +1,7 @@
+# echin-dotfiles Herdr configuration
+# Session state and logs intentionally stay outside this repository.
+onboarding = false
+
+[theme]
+name = "terminal"
+auto_switch = false
