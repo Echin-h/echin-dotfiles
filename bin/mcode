@@ -1,0 +1,10 @@
+#!/bin/zsh
+# Open directories as project workspaces in the current terminal.
+mcode_root=${1-.}
+if (( $# <= 1 )) && [[ -d "$mcode_root" ]]; then
+  builtin cd -- "$mcode_root" || exit 1
+  exec nvim -c 'lua Snacks.dashboard.open({win=0,buf=0}); require("neo-tree.command").execute({action="show",position="left",dir=vim.uv.cwd()})'
+fi
+
+# Explicit files and Neovim options retain the usual editor plus sidebar.
+exec nvim "$@" -c 'Neotree show'

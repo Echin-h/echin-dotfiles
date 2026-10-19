@@ -2,6 +2,7 @@
 # This file intentionally contains no credentials or host-specific paths.
 
 export ZSH="${ZSH:-$HOME/.oh-my-zsh}"
+export ZSH_CUSTOM="${ZSH_CUSTOM:-$ZSH/custom}"
 export GOPATH="${GOPATH:-$HOME/go}"
 export PATH="$HOME/.local/bin:$HOME/go/bin:$PATH"
 

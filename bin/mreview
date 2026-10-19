@@ -1,0 +1,131 @@
+#!/bin/zsh
+# Review Git revisions without switching branches or changing the working tree.
+set -eu
+
+usage() {
+  print 'Usage: mreview [target | A B | A..B | A...B]'
+  print '       mreview --commit HASH'
+  print '       mreview --history [branch-or-range]'
+  print '  mreview                    PR diff: default branch merge-base -> HEAD'
+  print '  mreview feature/example    Browse latest 5 commits; click to expand older commits'
+  print '  mreview HASH               Review one commit (first parent -> commit)'
+  print '  mreview --commit HASH      Explicit single-commit review; root commits supported'
+  print '  mreview A B                Exact snapshots: A -> B'
+  print '  mreview A..B               Exact snapshots: A -> B'
+  print '  mreview A...B              PR diff: merge-base(A, B) -> B'
+  print '  mreview --history          Browse commits, newest selected'
+  print '  mreview --history A..B     Browse only commits in this range'
+  print 'Missing hashes are fetched from configured remotes, including PR history, without checkout.'
+  print 'MATE_REVIEW_BASE overrides the default base. No working files are changed.'
+}
+
+ensure_commit() {
+  local revision="$1" resolved
+  if [[ "$revision" =~ '^[0-9a-fA-F]{7,64}$' ]]; then
+    python3 "$HOME/.local/lib/mate-code/resolve-review-commit.py" "$revision"
+    return
+  fi
+  if resolved=$(git rev-parse --verify --quiet --end-of-options "${revision}^{commit}"); then
+    print -r -- "$resolved"
+    return
+  fi
+  print -u2 -- "找不到本地版本：${revision}"
+  return 1
+}
+
+open_history() {
+  export MATE_REVIEW_MODE=history
+  export MATE_REVIEW_RANGE="$1"
+  export MATE_REVIEW_LIMIT="$2"
+  git rev-list --max-count=1 "$MATE_REVIEW_RANGE" -- >/dev/null
+  exec nvim -c 'lua require("config.review_commits").open_history()'
+}
+
+open_commit() {
+  export MATE_REVIEW_MODE=commit
+  MATE_REVIEW_COMMIT=$(ensure_commit "$1") || return 1
+  export MATE_REVIEW_COMMIT
+  # ^! is Diffview's native single-commit syntax: it handles an initial commit
+  # as an empty-tree diff and a merge as its first-parent diff.
+  export MATE_REVIEW_RANGE="${MATE_REVIEW_COMMIT}^!"
+  exec nvim -c 'lua vim.api.nvim_cmd({cmd="DiffviewOpen",args={vim.env.MATE_REVIEW_RANGE}},{})'
+}
+
+default_base() {
+  if [[ -n "${MATE_REVIEW_BASE:-}" ]]; then
+    print -r -- "$MATE_REVIEW_BASE"
+    return
+  fi
+  local remote_base
+  if remote_base=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD); then
+    print -r -- "$remote_base"
+    return
+  fi
+  local candidate
+  for candidate in origin/main main origin/master master; do
+    if git rev-parse --verify --quiet --end-of-options "${candidate}^{commit}" >/dev/null; then
+      print -r -- "$candidate"
+      return
+    fi
+  done
+  print -u2 '无法确定基准分支，请指定两个版本，例如：mreview main HEAD'
+  return 1
+}
+
+case "${1:-}" in
+  --help|-h) usage; exit 0 ;;
+  --commit)
+    shift
+    if (( $# != 1 )) || [[ "$1" == -* ]]; then usage >&2; exit 2; fi
+    open_commit "$1"
+    ;;
+  --history)
+    shift
+    if (( $# > 1 )) || [[ "${1:-}" == -* ]]; then usage >&2; exit 2; fi
+    open_history "${1:-HEAD}" 0
+    ;;
+esac
+
+if (( $# > 2 )); then usage >&2; exit 2; fi
+for revision in "$@"; do
+  if [[ "$revision" == -* ]]; then usage >&2; exit 2; fi
+done
+
+if (( $# == 1 )) && [[ "$1" != *..* ]]; then
+  if [[ "$1" =~ '^[0-9a-fA-F]{7,64}$' ]]; then
+    open_commit "$1"
+  else
+    ensure_commit "$1" >/dev/null
+    open_history "$1" 5
+  fi
+fi
+
+comparison='...'
+if (( $# == 2 )); then
+  left="$1"
+  right="$2"
+  comparison='..'
+elif (( $# == 1 )) && [[ "$1" == *...* ]]; then
+  left="${1%%...*}"
+  right="${1#*...}"
+elif (( $# == 1 )) && [[ "$1" == *..* ]]; then
+  left="${1%%..*}"
+  right="${1#*..}"
+  comparison='..'
+else
+  left=$(default_base)
+  right="${1:-HEAD}"
+fi
+left="${left:-HEAD}"
+right="${right:-HEAD}"
+ensure_commit "$left" >/dev/null
+ensure_commit "$right" >/dev/null
+if [[ "$comparison" == '...' ]]; then
+  if ! git merge-base "$left" "$right" >/dev/null; then
+    print -u2 '这两个版本没有可用的共同祖先；可用 mreview A B 直接比较快照。'
+    exit 1
+  fi
+fi
+export MATE_REVIEW_RANGE="${left}${comparison}${right}"
+export MATE_REVIEW_MODE=diff
+exec nvim -c 'lua vim.api.nvim_cmd({cmd="DiffviewOpen",args={vim.env.MATE_REVIEW_RANGE}},{})'

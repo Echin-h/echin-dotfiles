@@ -5,3 +5,10 @@
 .env.*
 !.env.example
 config/zsh/.zsh_history
+config/nvim/.repro
+config/nvim/data
+config/nvim/doc/tags
+config/nvim/*.log
+**/node_modules/
+__pycache__/
+*.py[cod]

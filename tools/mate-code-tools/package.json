@@ -1,0 +1,9 @@
+{
+  "name": "mate-code-tools",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@tailwindcss/language-server": "^0.16.0",
+    "@vtsls/language-server": "^0.3.0"
+  }
+}

@@ -15,8 +15,23 @@ check_link() {
 
 check_link "$HOME/.zprofile" "$REPO_DIR/config/zsh/.zprofile"
 check_link "$HOME/.zshrc" "$REPO_DIR/config/zsh/.zshrc"
+check_link "$HOME/.config/nvim" "$REPO_DIR/config/nvim"
 check_link "$HOME/.config/ghostty/config" "$REPO_DIR/config/ghostty/config"
 check_link "$HOME/.config/herdr/config.toml" "$REPO_DIR/config/herdr/config.toml"
+check_link "$HOME/.local/bin/mcode" "$REPO_DIR/bin/mcode"
+check_link "$HOME/.local/bin/mreview" "$REPO_DIR/bin/mreview"
+check_link "$HOME/.local/lib/mate-code/resolve-review-commit.py" "$REPO_DIR/lib/mate-code/resolve-review-commit.py"
+
+for tool in rg fd tree-sitter gopls python3; do
+  if command -v "$tool" >/dev/null 2>&1; then ok "$tool"; else fail "missing dependency: $tool"; fi
+done
+for tool in vtsls tailwindcss-language-server; do
+  if [ -x "$HOME/.local/share/mate-code-tools/node_modules/.bin/$tool" ]; then
+    ok "$tool"
+  else
+    fail "missing language server: $tool"
+  fi
+done
 
 if zsh -n "$HOME/.zprofile" && zsh -n "$HOME/.zshrc"; then ok 'zsh syntax'; else fail 'zsh syntax'; fi
 
@@ -34,6 +49,15 @@ if [ -d '/Applications/Ghostty.app' ] || (command -v brew >/dev/null 2>&1 && bre
   ok 'Ghostty app'
 else
   warn 'Ghostty app not found'
+fi
+if command -v nvim >/dev/null 2>&1; then
+  if DOTFILES_NVIM_CHECK="$REPO_DIR/scripts/check-nvim.lua" nvim --headless '+lua dofile(vim.env.DOTFILES_NVIM_CHECK)' +qa; then
+    ok "Neovim $(nvim --version | sed -n '1s/^NVIM v//p')"
+  else
+    fail 'Neovim configuration failed; run nvim and :checkhealth'
+  fi
+else
+  fail 'Neovim executable not found'
 fi
 if command -v herdr >/dev/null 2>&1; then ok "Herdr $(herdr --version 2>/dev/null || true)"; else warn 'Herdr executable not found'; fi
 
