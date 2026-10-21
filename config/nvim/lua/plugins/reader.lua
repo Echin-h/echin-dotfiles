@@ -55,6 +55,8 @@ return {
   {
     "neovim/nvim-lspconfig",
     opts = {
+      -- Keep diagnostics available on demand without text beside the code.
+      diagnostics = { virtual_text = false, virtual_lines = false },
       servers = {
         ["*"] = {
           keys = { { "gd", function() require("config.reader").definition() end, desc = "Go to definition", has = "definition" } },

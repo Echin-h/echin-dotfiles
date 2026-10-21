@@ -35,6 +35,8 @@ diff 新增行、修改行以绿色底色标出，修改字符使用更亮绿色
 
 普通可编辑文件自动保存：停止输入约 800ms、退出插入、切换文件或失去焦点时写入。未命名文件、只读文件和历史快照不自动保存。自动格式化保持关闭；写入失败会提示并保留编辑内容。
 
+诊断文字默认不显示在代码行尾或额外行中；函数跳转、引用查找和诊断数据仍可用。需要时用 `:lua vim.diagnostic.open_float()` 查看当前行的诊断说明。
+
 Go 使用已有 gopls；TS/JS/React 使用 vtsls；Tailwind 使用官方 language server。
 Tailwind v4 需要项目安装依赖，并有导入 Tailwind 的 CSS 入口；多项目可按官方设置指定入口。
 工具安装在 ~/.local/share/mate-code-tools，插件版本记录在 lazy-lock.json。
