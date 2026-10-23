@@ -101,11 +101,11 @@ function M.line()
     return ""
   end
   local range = snapshot and snapshot.revision:sub(1, 8) or (view and view.rev_arg) or ""
-  local text = button(1, "整体改动") .. button(2, "提交历史")
+  local text = button(1, "整体改动") .. button(2, "提交历史") .. button(5, "退出审阅")
   if vim.o.columns >= 130 and range ~= "" then
     text = text .. " | " .. escape(range)
   end
-  return text .. "%<%=" .. button(5, "退出审阅")
+  return text .. "%<%="
 end
 function M.file_bar(tree)
   return button(6, tree and "改动文件" or "[改动文件]")

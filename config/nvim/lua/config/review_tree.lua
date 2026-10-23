@@ -15,11 +15,38 @@ local function notice(text)
   vim.notify(text, vim.log.levels.INFO, { title = "Review 目录" })
 end
 
+-- Reuse mcode's Neo-tree presentation without its live-filesystem/Git source.
 local function render(state)
   if not valid(state.win) then
     return
   end
-  local lines, rows = {}, {}
+  local config = require("neo-tree").ensure_config().default_component_configs
+  local components = require("neo-tree.sources.common.components")
+  local status_kinds = {
+    A = "added",
+    M = "modified",
+    D = "deleted",
+    R = "renamed",
+    C = "renamed",
+    T = "modified",
+    U = "conflict",
+  }
+  local status_groups = {
+    added = "NeoTreeGitAdded",
+    modified = "NeoTreeGitModified",
+    deleted = "NeoTreeGitDeleted",
+    renamed = "NeoTreeGitRenamed",
+    conflict = "NeoTreeGitConflict",
+  }
+  local function git_status(_, node)
+    local kind = status_kinds[state.changed[node.path]]
+    if not kind then
+      return {}
+    end
+    return { text = config.git_status.symbols[kind] or state.changed[node.path], highlight = status_groups[kind] }
+  end
+  local style = { selected = {}, components = { git_status = git_status } }
+  local lines, rows, highlights, statuses = {}, {}, {}, {}
   local function children(node, depth)
     local list = vim.tbl_values(node.children or {})
     table.sort(list, function(a, b)
@@ -28,16 +55,46 @@ local function render(state)
       end
       return a.name:lower() < b.name:lower()
     end)
-    for _, child in ipairs(list) do
-      local status = state.changed[child.path] or " "
-      local marker = child.children and (state.expanded[child.path] and "▾ " or "▸ ") or "  "
-      lines[#lines + 1] = string.rep("  ", depth)
-        .. marker
-        .. status
-        .. " "
-        .. child.name
-        .. (child.children and "/" or "")
-      rows[#lines] = child
+    for index, child in ipairs(list) do
+      local presentation = {
+        id = child.path,
+        path = child.path,
+        name = child.name,
+        type = child.children and "directory" or "file",
+        level = depth + 1,
+        loaded = true,
+        is_last_child = index == #list,
+        has_children = function()
+          return child.children and next(child.children) ~= nil or false
+        end,
+        is_expanded = function()
+          return state.expanded[child.path] or false
+        end,
+        get_depth = function()
+          return depth + 2
+        end,
+      }
+      local line, spans = "", {}
+      local function append(component)
+        if component.text then
+          local first = #line
+          line = line .. component.text
+          if component.highlight and #line > first then
+            spans[#spans + 1] = { group = component.highlight, first = first, last = #line }
+          end
+        else
+          for _, part in ipairs(component) do
+            append(part)
+          end
+        end
+      end
+      append(components.indent(config.indent, presentation, style))
+      append(components.icon(config.icon, presentation, style))
+      append(components.name(config.name, presentation, style))
+      lines[#lines + 1], rows[#rows + 1], highlights[#highlights + 1] = line, child, spans
+      if not child.children or not state.expanded[child.path] then
+        statuses[#lines] = git_status(nil, presentation)
+      end
       if child.children and state.expanded[child.path] then
         children(child, depth + 1)
       end
@@ -52,15 +109,24 @@ local function render(state)
   api.nvim_buf_set_lines(state.buf, 0, -1, false, lines)
   vim.bo[state.buf].modifiable = false
   api.nvim_buf_clear_namespace(state.buf, ns, 0, -1)
-  for i, node in ipairs(rows) do
-    local group = node.children and "Directory" or (state.changed[node.path] and "DiffviewFilePanelInsertions")
-    if group then
-      api.nvim_buf_add_highlight(state.buf, ns, group, i - 1, 0, -1)
+  for row, spans in ipairs(highlights) do
+    for _, span in ipairs(spans) do
+      api.nvim_buf_add_highlight(state.buf, ns, span.group, row - 1, span.first, span.last)
+    end
+    local status = statuses[row]
+    if status and status.text and status.text ~= "" then
+      api.nvim_buf_set_extmark(
+        state.buf,
+        ns,
+        row - 1,
+        0,
+        { virt_text = { { status.text .. " ", status.highlight } }, virt_text_pos = "right_align" }
+      )
     end
   end
-  for i, node in ipairs(rows) do
+  for row, node in ipairs(rows) do
     if node.path == state.context.path then
-      api.nvim_win_set_cursor(state.win, { i, 0 })
+      api.nvim_win_set_cursor(state.win, { row, 0 })
       break
     end
   end
@@ -101,6 +167,7 @@ function M.select(open_reading)
     render(state)
     return
   end
+  state.context.path = node.path
   local token = {}
   state.token = token
   local context = vim.tbl_extend("force", state.context, { path = node.path })
@@ -171,6 +238,17 @@ function M.open(context, source)
         state.changed[file.oldpath] = file.status
       end
     end
+    local ancestors = {}
+    for file in pairs(state.changed) do
+      local parent = vim.fs.dirname(file)
+      while parent and parent ~= "." and parent ~= "" do
+        ancestors[parent] = "M"
+        parent = vim.fs.dirname(parent)
+      end
+    end
+    for path, status in pairs(ancestors) do
+      state.changed[path] = status
+    end
   end
   local function show(root)
     if trees[tab] ~= state or api.nvim_get_current_tabpage() ~= tab or not valid(source.win) then
@@ -196,7 +274,8 @@ function M.open(context, source)
         title_pos = "center",
       })
     else
-      vim.cmd("topleft 34vsplit")
+      local width = tonumber(require("neo-tree").ensure_config().window.width) or 34
+      vim.cmd("topleft " .. width .. "vsplit")
       state.win = api.nvim_get_current_win()
       vim.wo[state.win].diff = false
       vim.wo[state.win].scrollbind = false
@@ -218,6 +297,8 @@ function M.open(context, source)
       signcolumn = "no",
       foldcolumn = "0",
       cursorline = true,
+      cursorlineopt = "line",
+      winhighlight = "Normal:NeoTreeNormal,NormalNC:NeoTreeNormalNC,CursorLine:NeoTreeCursorLine,SignColumn:NeoTreeSignColumn,WinSeparator:NeoTreeWinSeparator,EndOfBuffer:NeoTreeEndOfBuffer,FloatBorder:NeoTreeFloatBorder",
       winfixwidth = true,
     }) do
       vim.wo[state.win][key] = value
@@ -303,6 +384,18 @@ function M.setup()
     end
   end
   local group = api.nvim_create_augroup("MateReviewTree", { clear = true })
+  api.nvim_create_autocmd("ColorScheme", {
+    group = group,
+    callback = function()
+      vim.schedule(function()
+        for _, state in pairs(trees) do
+          if state.root then
+            render(state)
+          end
+        end
+      end)
+    end,
+  })
   api.nvim_create_autocmd("WinClosed", {
     group = group,
     callback = function(event)
