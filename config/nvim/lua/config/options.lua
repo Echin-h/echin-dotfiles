@@ -1,6 +1,6 @@
 -- Mouse-first code reading in Herdr.
 vim.opt.mouse = "a"
-vim.opt.mousescroll = "ver:2,hor:6"
+vim.opt.mousescroll = "ver:2,hor:1"
 vim.opt.mousemoveevent = true
 vim.opt.mousemodel = "popup"
 vim.opt.number = true
