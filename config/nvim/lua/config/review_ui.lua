@@ -94,6 +94,15 @@ function M.setup()
       M.decorate_view(require("diffview.lib").get_current_view())
     end,
   })
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = "DiffviewDiffBufWinEnter",
+    callback = function()
+      -- Keep the file panel selection, but avoid the cursorline decoration in
+      -- code panes. It reads as an underline over changed lines in Diffview.
+      vim.opt_local.cursorline = false
+    end,
+  })
   M.highlights()
 end
 

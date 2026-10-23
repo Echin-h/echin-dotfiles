@@ -6,6 +6,7 @@ local temp = vim.fn.tempname() .. "-mate-review"
 vim.fn.mkdir(temp, "p")
 local base = vim.uv.fs_realpath(temp) or temp
 local building = {}
+local ready_clients = {}
 
 function M.is_snapshot_path(path)
   if type(path) ~= "string" then
@@ -16,6 +17,10 @@ function M.is_snapshot_path(path)
 end
 
 function M.context(buf)
+  local item = vim.b[buf].mate_review_snapshot
+  if item then
+    return { root = item.root, revision = item.revision, path = vim.api.nvim_buf_get_name(buf):sub(#item.dir + 2) }
+  end
   local lib = package.loaded["diffview.lib"]
   local view = lib and lib.get_current_view()
   if not view or not view.cur_layout then
@@ -51,6 +56,7 @@ local function remove(snapshot)
     end
   end
   for _, id in ipairs(snapshot.clients or {}) do
+    ready_clients[id] = nil
     local client = vim.lsp.get_client_by_id(id)
     if client then
       client:stop(true)
@@ -203,11 +209,13 @@ function M.prepare(context, source, callback)
       cancelled = true
     end
   end
-  vim.notify(
-    "正在准备 " .. context.revision:sub(1, 8) .. " 的历史定义…",
-    vim.log.levels.INFO,
-    { title = "历史代码导航" }
-  )
+  if not snapshots[context.root .. ":" .. context.revision] then
+    vim.notify(
+      "正在准备 " .. context.revision:sub(1, 8) .. " 的代码上下文…",
+      vim.log.levels.INFO,
+      { title = "历史代码导航" }
+    )
+  end
   snapshot(context, function(err, item)
     if cancelled then
       return
@@ -281,10 +289,12 @@ function M.prepare(context, source, callback)
       local line = vim.api.nvim_buf_get_lines(buf, source.cursor[1] - 1, source.cursor[1], false)[1] or ""
       -- vtsls initializes before its first project finishes loading; give the
       -- newly opened project a turn to index imports instead of jumping to an alias.
+      local delay = name == "vtsls" and not ready_clients[id] and 1000 or 0
       vim.defer_fn(function()
         if cancelled then
           return
         end
+        ready_clients[id] = true
         callback(nil, {
           client = client,
           buf = buf,
@@ -297,7 +307,7 @@ function M.prepare(context, source, callback)
             },
           },
         })
-      end, 1000)
+      end, delay)
     end
     ready()
   end)

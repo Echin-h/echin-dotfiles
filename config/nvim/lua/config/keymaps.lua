@@ -2,6 +2,9 @@
 require("config.reader").setup()
 
 vim.keymap.set("n", "mm", "<C-o>", { desc = "Jump back (Ctrl-o)" })
+vim.keymap.set("n", "gR", function()
+  require("config.navigation").return_review()
+end, { desc = "Return directly to review" })
 -- Remap through mm so historical review's buffer-local return also applies.
 for _, key in ipairs({ "<D-[>", "<D-【>" }) do
   vim.keymap.set("n", key, "mm", { remap = true, desc = "Jump back (mm)" })

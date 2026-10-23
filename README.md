@@ -85,6 +85,8 @@ doctor.sh                # 本地健康检查
 
 ## Neovim
 
+mreview 顶部统一审阅范围，左栏切换改动文件 / 完整目录，定义、引用和大纲在右侧预览；明确打开后进入只读阅读，返回审阅恢复原位置。
+
 Neovim 是独立编辑器，Zsh 仅负责提供 `nvim`、`mcode`、`mreview` 命令的搜索路径。配置完整位于 `config/nvim/`，安装后整体链接到 `~/.config/nvim`。原有目录会先备份，包括其中已有的 Git 元数据；仓库不复制本机插件缓存、会话、undo 文件或日志。
 
 ```bash
@@ -93,7 +95,9 @@ mcode .                    # 阅读当前项目（目录树与工具栏）
 mcode path/to/file.tsx      # 打开文件
 mreview                    # 默认主分支共同祖先到 HEAD 的 diff
 mreview main HEAD          # 比较两个版本
-mreview --commit HASH       # 查看一次提交
+mreview --commit HASH      # 查看一次提交
+mreview feature/name       # 查看目标分支整体改动
+mreview --history          # 同一审阅页选择提交，20 条一页
 ```
 
 本套配置基于 LazyVim，主要包含：TokyoNight 主题、鼠标目录树、顶部导航和阅读历史、函数定义/引用、Git diff、Worktree 切换，以及 Go、TypeScript/React、Tailwind 语言服务。完整快捷键和审阅行为见 [NeoVim 中文使用说明](config/nvim/README.zh-CN.md)。

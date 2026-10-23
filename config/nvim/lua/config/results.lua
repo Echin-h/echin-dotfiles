@@ -8,6 +8,8 @@ local function window()
 end
 
 function M.close()
+  local context = package.loaded["config.review_context"]
+  if context and context.close() then return true end
   local win = window()
   if not win then return false end
   local target = vim.api.nvim_get_current_win()
@@ -43,7 +45,8 @@ function M.setup()
     end
   end, { desc = "Dismiss results or escape" })
   vim.keymap.set("n", "q", function()
-    if window() then vim.schedule(M.close); return "" end
+    local context = package.loaded["config.review_context"]
+    if window() or (context and context.focused()) then vim.schedule(M.close); return "" end
     return "q"
   end, { expr = true, desc = "Close results or record macro" })
 end

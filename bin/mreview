@@ -1,22 +1,24 @@
 #!/bin/zsh
 # Review Git revisions without switching branches or changing the working tree.
 set -eu
+review_editor=${MATE_REVIEW_NVIM:-nvim}
 
 usage() {
-  print 'Usage: mreview [target | A B | A..B | A...B]'
-  print '       mreview --commit HASH'
-  print '       mreview --history [branch-or-range]'
-  print '  mreview                    PR diff: default branch merge-base -> HEAD'
-  print '  mreview feature/example    Browse latest 5 commits; click to expand older commits'
-  print '  mreview HASH               Review one commit (first parent -> commit)'
-  print '  mreview --commit HASH      Explicit single-commit review; root commits supported'
-  print '  mreview A B                Exact snapshots: A -> B'
-  print '  mreview A..B               Exact snapshots: A -> B'
-  print '  mreview A...B              PR diff: merge-base(A, B) -> B'
-  print '  mreview --history          Browse commits, newest selected'
-  print '  mreview --history A..B     Browse only commits in this range'
-  print 'Missing hashes are fetched from configured remotes, including PR history, without checkout.'
-  print 'MATE_REVIEW_BASE overrides the default base. No working files are changed.'
+  print '用法：mreview [分支 | HASH | A B | A..B | A...B]'
+  print '      mreview --commit HASH'
+  print '      mreview --history [分支或范围]'
+  print '  mreview                  审阅默认主分支共同祖先到 HEAD 的整体改动'
+  print '  mreview feature/name     审阅该分支的整体改动'
+  print '  mreview HASH             审阅一次提交（第一父提交 → 该提交）'
+  print '  mreview --commit HASH    明确指定单次提交，支持首次提交'
+  print '  mreview A B / A..B       比较两个完整快照'
+  print '  mreview A...B            比较共同祖先到 B 的整体改动'
+  print '  mreview --history       在同一审阅页选择 HEAD 历史，默认最新提交'
+  print '  mreview --history A..B  只浏览该范围的提交'
+  print '顶部切换整体改动／提交历史；提交先加载 20 条，可继续加载。'
+  print '左栏切换改动文件／完整目录；定义、引用、大纲统一在右侧预览。'
+  print '缺失的 hash 会从配置的远程获取；不会切换分支或修改工作文件。'
+  print 'MATE_REVIEW_BASE 指定默认基准；MATE_REVIEW_NVIM 指定 Neovim 程序。'
 }
 
 ensure_commit() {
@@ -36,9 +38,8 @@ ensure_commit() {
 open_history() {
   export MATE_REVIEW_MODE=history
   export MATE_REVIEW_RANGE="$1"
-  export MATE_REVIEW_LIMIT="$2"
   git rev-list --max-count=1 "$MATE_REVIEW_RANGE" -- >/dev/null
-  exec nvim -c 'lua require("config.review_commits").open_history()'
+  exec "$review_editor" -c 'lua require("config.review_commits").open_history()'
 }
 
 open_commit() {
@@ -48,7 +49,8 @@ open_commit() {
   # ^! is Diffview's native single-commit syntax: it handles an initial commit
   # as an empty-tree diff and a merge as its first-parent diff.
   export MATE_REVIEW_RANGE="${MATE_REVIEW_COMMIT}^!"
-  exec nvim -c 'lua vim.api.nvim_cmd({cmd="DiffviewOpen",args={vim.env.MATE_REVIEW_RANGE}},{})'
+  export MATE_REVIEW_HISTORY_RANGE="$MATE_REVIEW_RANGE"
+  exec "$review_editor" -c 'lua vim.api.nvim_cmd({cmd="DiffviewOpen",args={vim.env.MATE_REVIEW_RANGE}},{})'
 }
 
 default_base() {
@@ -82,7 +84,7 @@ case "${1:-}" in
   --history)
     shift
     if (( $# > 1 )) || [[ "${1:-}" == -* ]]; then usage >&2; exit 2; fi
-    open_history "${1:-HEAD}" 0
+    open_history "${1:-HEAD}"
     ;;
 esac
 
@@ -96,7 +98,6 @@ if (( $# == 1 )) && [[ "$1" != *..* ]]; then
     open_commit "$1"
   else
     ensure_commit "$1" >/dev/null
-    open_history "$1" 5
   fi
 fi
 
@@ -125,7 +126,10 @@ if [[ "$comparison" == '...' ]]; then
     print -u2 '这两个版本没有可用的共同祖先；可用 mreview A B 直接比较快照。'
     exit 1
   fi
+  export MATE_REVIEW_HISTORY_RANGE="$(git merge-base "$left" "$right")..${right}"
+else
+  export MATE_REVIEW_HISTORY_RANGE="${left}..${right}"
 fi
 export MATE_REVIEW_RANGE="${left}${comparison}${right}"
 export MATE_REVIEW_MODE=diff
-exec nvim -c 'lua vim.api.nvim_cmd({cmd="DiffviewOpen",args={vim.env.MATE_REVIEW_RANGE}},{})'
+exec "$review_editor" -c 'lua vim.api.nvim_cmd({cmd="DiffviewOpen",args={vim.env.MATE_REVIEW_RANGE}},{})'

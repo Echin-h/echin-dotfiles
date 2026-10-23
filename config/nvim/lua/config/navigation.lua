@@ -27,7 +27,8 @@ local function capture(win)
       cursor = vim.api.nvim_win_get_cursor(win),
       view = vim.fn.winsaveview(),
       snapshot = vim.b.mate_review_snapshot,
-      review_origin = require("config.review_navigation").context(vim.api.nvim_get_current_buf()) ~= nil,
+      review_origin = not vim.b.mate_review_snapshot
+        and require("config.review_navigation").context(vim.api.nvim_get_current_buf()) ~= nil,
     }
   end)
 end
@@ -80,7 +81,7 @@ local function navigate(direction)
   local restore_win = win
   local closing_tab
   if target.review_origin and not vim.api.nvim_win_is_valid(target.win) then
-    notice("原 Review 窗口已关闭，请重新打开比较", vim.log.levels.WARN)
+    notice("原 审阅窗口已关闭，请重新打开比较", vim.log.levels.WARN)
     return
   end
   if target.review_origin then
@@ -110,10 +111,34 @@ local function navigate(direction)
 end
 
 function M.back()
+  local context = package.loaded["config.review_context"]
+  if context and context.dismiss() then return end
   navigate("back")
 end
 function M.forward()
   navigate("forward")
+end
+
+-- Return directly to the Diffview window that started a historical definition
+-- chain. `mm` remains a one-step back operation for users who want to inspect
+-- each intermediate definition.
+function M.return_review()
+  local context = package.loaded["config.review_context"]
+  if context and context.dismiss() and not vim.b.mate_review_snapshot then return end
+  for _ = 1, 100 do
+    local state = history[vim.api.nvim_get_current_win()]
+    local back = state and state.back
+    if not back or #back == 0 then
+      notice("没有可返回的 审阅窗口")
+      return
+    end
+    if back[#back].review_origin then
+      navigate("back")
+      return
+    end
+    navigate("back")
+  end
+  notice("定义跳转链过长，未能返回 审阅窗口", vim.log.levels.WARN)
 end
 
 local function jump(source, candidate)
@@ -165,10 +190,10 @@ function M.position()
   return capture(vim.api.nvim_get_current_win())
 end
 
-function M.open_location(location, snapshot, source)
+function M.open_location(location, snapshot, source, encoding)
   jump(source or capture(vim.api.nvim_get_current_win()), {
     location = location,
-    encoding = "utf-8",
+    encoding = encoding or "utf-8",
     snapshot = snapshot,
   })
 end
@@ -318,7 +343,7 @@ function M.setup()
   require("config.review_navigation").setup()
   local group = vim.api.nvim_create_augroup("MateCodeNavigation", { clear = true })
   local function readable(win)
-    if vim.bo.buftype ~= "" or vim.api.nvim_buf_get_name(0) == "" then
+    if vim.w[win].mate_review_preview or vim.bo.buftype ~= "" or vim.api.nvim_buf_get_name(0) == "" then
       return false
     end
     local diffview = package.loaded["diffview.lib"]
